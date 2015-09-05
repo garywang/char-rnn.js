@@ -9,6 +9,7 @@ function assert(condition) {
 function Memory(buffer, next) {
   this.buffer = buffer;
   this.next = next;
+  this.stack = [];
 }
 
 Memory.prototype.malloc = function(size) {
@@ -18,7 +19,13 @@ Memory.prototype.malloc = function(size) {
   return arr;
 }
 
-Memory.prototype.free = function free(array) {
+Memory.prototype.pushFrame = function() {
+  this.stack.push(this.next);
+}
+
+Memory.prototype.popFrame = function free(array) {
+  this.next = this.stack.pop();
+  assert(this.next !== undefined);
 }
 
 function Linalg(memory) {
@@ -79,28 +86,44 @@ function Linalg(memory) {
     return outVec;
   }
 
-  function vecAddElems(one, two, out) {
-    assert(one.length == two.length);
-    assert(one.length == out.length);
-    for (var n = 0; n < one.length; n++) {
-      out[n] = one[n] + two[n];
+  function map1(func) {
+    return function(inVec, outVec) {
+      if (!outVec) {
+        outVec = memory.malloc(inVec.length);
+      }
+      assert(inVec.length == outVec.length);
+      for (var n = 0; n < inVec.length; n++) {
+        outVec[n] = func(inVec[n]);
+      }
+      return outVec;
     }
-    return out;
   }
 
-  function vecMultElems(one, two, out) {
-    assert(one.length == two.length);
-    assert(one.length == out.length);
-    for (var n = 0; n < one.length; n++) {
-      out[n] = one[n] * two[n];
+  function map2(func) {
+    return function(one, two, out) {
+      assert(one.length == two.length);
+      if (!out) {
+        out = memory.malloc(one.length);
+      }
+      assert(one.length == out.length);
+      for (var n = 0; n < one.length; n++) {
+        out[n] = func(one[n], two[n]);
+      }
+      return out;
     }
-    return out;
   }
+
+  var add = map2((x, y) => x + y);
+  var mult = map2((x, y) => x * y);
 
   function makeAffineTransformation(linear, shift) {
     function affine(inVec, outVec) {
+      if (!outVec) {
+        outVec = memory.malloc(linear.nRows);
+      }
+      assert(inVec.byteOffset != outVec.byteOffset);
       matMult(linear, inVec, outVec);
-      vecAddElems(outVec, shift, outVec);
+      add(outVec, shift, outVec);
       return outVec;
     }
     affine.inLength = linear.nCols;
@@ -108,10 +131,31 @@ function Linalg(memory) {
     return affine;
   }
 
+  function sigmoid(inVec, outVec) {
+    if (!outVec) {
+      outVec = memory.malloc(inVec.length);
+    }
+    assert(inVec.length == outVec.length);
+    for (var n = 0; n < inVec.length; n++) {
+      outVec[n] = 1 / (1 + Math.exp(-inVec[n]));
+    }
+    return outVec;
+  }
+
+  function scalarMult(inVec, scalar, outVec) {
+    return (map1(x => scalar * x)(inVec, outVec));
+  }
+
   return {
-    matMult: matMult,
-    vecAddElems: vecAddElems,
-    vecMultElems: vecMultElems,
+    vecAddElems: add,
+    vecMultElems: mult,
+    scalarMult: scalarMult,
+    //sigmoid: map1(x => 1 / (1 + Math.exp(-x))),
+    sigmoid: sigmoid,
+    tanh: map1(Math.tanh),
+    exp: map1(Math.exp),
+    log: map1(Math.log),
+    zero: map1(x => 0),
     makeAffineTransformation: makeAffineTransformation,
   };
 }
@@ -124,48 +168,83 @@ function bytesToString(bytes) {
   return decodeURIComponent(escape(bytes));
 }
 
+// See https://github.com/karpathy/char-rnn/blob/master/model/LSTM.lua
 function LSTM(memory, linalg, params) {
   const malloc = memory.malloc.bind(memory);
   const module = {};
 
-  module.makeState = function makeState() {
-    return malloc(params.nNodes * params.nLayers * 2);
+  function makeState() {
+    var state = malloc(params.nNodes * params.nLayers * 2);
+    linalg.zero(state, state);
+    return state;
   }
+  module.makeState = makeState;
 
-  module.makeProbs = function makeProbs() {
+  function makeProbs() {
     return malloc(params.affines[params.affines.length - 1].outLength);
   }
+  module.makeProbs = makeProbs;
 
-  module.forward = function forward(inState, byte, outState, outLogProbs) {
-    // TODO: implement this
-    console.log(forwardLayer(indexState(inState, 0),
-                             indexState(inState, 1),
-                             byteToVector(byte),
-                             params.affines[0],
-                             params.affines[1],
-                             indexState(outState, 0),
-                             indexState(outState, 1)));
+  function forward(inState, byte, outState, outProbs) {
+    memory.pushFrame();
+
+    var input = byteToVector(byte);
+    for (var n = 0; n < params.nLayers; n++) {
+      input = forwardLayer(indexState(inState, 2 * n),
+                           indexState(inState, 2 * n + 1),
+                           input,
+                           params.affines[2 * n],
+                           params.affines[2 * n + 1],
+                           indexState(outState, 2 * n),
+                           indexState(outState, 2 * n + 1));
+    }
+    var topH = indexState(outState, 2 * params.nLayers - 1);
+    params.affines[2 * params.nLayers](topH, outProbs);
+    linalg.exp(outProbs, outProbs);
+    normalize(outProbs);
+
+    memory.popFrame();
+    return outProbs;
   }
+  module.forward = forward;
 
   function forwardLayer(prevC, prevH, x, i2h, h2h, nextC, nextH) {
-    // TODO: implement this
-    var all_input_sums = linalg.vecAddElems(i2h(x, malloc(4 * params.nNodes)),
-                                            h2h(prevH, malloc(4 * params.nNodes)),
-                                            malloc(4 * params.nNodes));
-    return all_input_sums;
+    memory.pushFrame();
+
+    var allInputSums = linalg.vecAddElems(i2h(x), h2h(prevH));
+
+    var inGate = linalg.sigmoid(indexState(allInputSums, 0));
+    var forgetGate = linalg.sigmoid(indexState(allInputSums, 1));
+    var outGate = linalg.sigmoid(indexState(allInputSums, 2));
+    var inTransform = linalg.tanh(indexState(allInputSums, 3));
+
+    nextC = linalg.vecAddElems(linalg.vecMultElems(forgetGate, prevC),
+                               linalg.vecMultElems(inGate, inTransform));
+    nextH = linalg.vecMultElems(outGate, linalg.tanh(nextC));
+
+    memory.popFrame();
+    return nextC;
   }
 
   function indexState(state, n) {
     return state.subarray(n * params.nNodes, (n + 1) * params.nNodes);
   }
 
+  function normalize(probs) {
+    var sum = probs.reduce((x, y) => x + y);
+    linalg.scalarMult(probs, 1 / sum, probs);
+    return probs;
+  }
+
   function byteToIndex(byte) {
     return params.vocab[byte];
   }
+  module.byteToIndex = byteToIndex;
 
   function indexToByte(index) {
     return params.ivocab[index];
   }
+  module.byteToIndex = byteToIndex;
 
   function byteToVector(byte) {
     var vec = malloc(params.affines[0].inLength);
@@ -173,7 +252,7 @@ function LSTM(memory, linalg, params) {
     return vec;
   }
 
-  return {forward: forward, makeState: makeState, makeProbs: makeProbs};
+  return module;
 }
 
 function load(path) {
@@ -188,7 +267,7 @@ function load(path) {
     return req;
   }
 
-  get(path + ".dat?f", "arraybuffer", function(buffer) {
+  get(path + ".dat", "arraybuffer", function(buffer) {
     get(path + ".json", "json", function(metadata) {
       console.log("Got data");
       init(buffer, metadata);
@@ -221,7 +300,7 @@ function init(buffer, metadata) {
   var params = {};
   params.affines = affines;
   params.nNodes = affines[0].outLength / 4;
-  params.nLayers = affines.length - 1;
+  params.nLayers = (affines.length - 1) / 2;
 
   params.vocab = {};
   params.ivocab = {};
@@ -236,64 +315,13 @@ function init(buffer, metadata) {
   console.log("inited");
 
   var lstm = LSTM(memory, linalg, params);
-  lstm.forward(lstm.makeState(), "a", lstm.makeState(), lstm.makeProbs());
+
+  var d = new Date();
+  for (var n = 0; n < 100; n++) {
+    lstm.forward(lstm.makeState(), "a", lstm.makeState(), lstm.makeProbs());
+  }
+  console.log(new Date() - d);
+  console.log(lstm.forward(lstm.makeState(), "a", lstm.makeState(), lstm.makeProbs()));
 }
 
 //load("data");
-
-//window.addEventListener("load", function() {
-/*
-  document.body.innerHTML = "load";
-
-  var buffer = new ArrayBuffer(0x1000000);
-  var next = 0;
-  function malloc(size) {
-    var arr = new Float32Array(buffer, next, size);
-    next += size * 4;
-    assert(next < 0x1000000);
-    return arr;
-  }
-
-  var matrix = malloc(N * N);
-  var vector = malloc(N);
-
-  var sum = 0;
-  for (var i = 0; i < N * N; i++) {
-    matrix[i] = Math.random() / 250;
-    sum += matrix[i];
-  }
-  for (var i = 0; i < N; i++) {
-    vector[i] = Math.random() / N;
-    sum += vector[i];
-  }
-
-  document.body.innerHTML += sum + ' ';
-  start = new Date();
-
-  var out;
-  for (var iter = 0; iter < 100; iter++) {
-    out = malloc(N);
-    matMult(matrix, vector, out);
-    //vector = out;
-  }
-  end = new Date();
-  document.body.innerHTML += end - start;
-  document.body.innerHTML += " ";
-  document.body.innerHTML += out[Math.floor(Math.random() * N)];
-
-  var mod = AsmModule(window, null, buffer);
-  start = new Date();
-  var out2 = malloc(N);
-  console.log(mod.matMult(matrix.byteOffset, vector.byteOffset, out2.byteOffset, N, N));
-  for (var iter = 0; iter < 100; iter++) {
-    mod.matMult(matrix.byteOffset, vector.byteOffset, out2.byteOffset, N, N);
-  }
-  end = new Date();
-  console.log(end - start);
-  console.log(out);
-  console.log(out2);
-  window.matrix = matrix;
-  window.vector = vector;
-  window.out2 = out2;
-*/
-//});
