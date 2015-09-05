@@ -27,7 +27,7 @@ function LSTM(memory, linalg, params) {
                            indexState(outState, 2 * n),
                            indexState(outState, 2 * n + 1));
     }
-    var topH = indexState(outState, 2 * params.nLayers - 1);
+    var topH = input;
     params.affines[2 * params.nLayers](topH, outProbs);
     linalg.exp(outProbs, outProbs);
     normalize(outProbs);
@@ -47,12 +47,13 @@ function LSTM(memory, linalg, params) {
     var outGate = linalg.sigmoid(indexState(allInputSums, 2));
     var inTransform = linalg.tanh(indexState(allInputSums, 3));
 
-    nextC = linalg.vecAddElems(linalg.vecMultElems(forgetGate, prevC),
-                               linalg.vecMultElems(inGate, inTransform));
-    nextH = linalg.vecMultElems(outGate, linalg.tanh(nextC));
+    linalg.vecAddElems(linalg.vecMultElems(forgetGate, prevC),
+                       linalg.vecMultElems(inGate, inTransform),
+                       nextC);
+    linalg.vecMultElems(outGate, linalg.tanh(nextC), nextH);
 
     memory.popFrame();
-    return nextC;
+    return nextH;
   }
 
   function indexState(state, n) {
@@ -77,6 +78,7 @@ function LSTM(memory, linalg, params) {
 
   function byteToVector(byte) {
     var vec = memory.malloc(params.affines[0].inLength);
+    linalg.zero(vec, vec);
     vec[byteToIndex(byte)] = 1.;
     return vec;
   }
