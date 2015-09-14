@@ -1,28 +1,34 @@
 var assert = require("assert");
+var Promise = require("promise");
 
 var utils = require("./utils");
 var stringToBytes = utils.stringToBytes;
 var bytesToString = utils.bytesToString;
 
 function loadFromUrl(path, callback) {
-  function get(url, type, callback) {
-    var req = new XMLHttpRequest();
-    req.open("GET", url, true);
-    req.responseType = type;
-    req.onload = function() {
-      callback(req.response);
-    }
-    req.send();
-    return req;
+  function get(url, type) {
+    return new Promise(function(resolve, reject) {
+      var req = new XMLHttpRequest();
+      req.open("GET", url, true);
+      req.responseType = type;
+      req.onload = function() {
+        resolve(req.response);
+      };
+      req.onerror = function() {
+        reject();
+      };
+      req.send();
+      return req;
+    });
   }
 
-  get(path + ".dat", "arraybuffer", function(buffer) {
-    get(path + ".json", "json", function(metadata) {
-      console.log("Got data");
-      var model = new Model(buffer, metadata);
-      callback(model);
+  return Promise.all([get(path + ".dat", "arraybuffer"),
+                      get(path + ".json", "json")])
+    .then(function(res) {
+      console.log("Got data " + path);
+      var model = new Model(res[0], res[1]);
+      return model;
     });
-  });
 }
 
 function Model(buffer, metadata) {
