@@ -1,4 +1,4 @@
-var assert = require("./assert");
+var assert = require("assert");
 
 function Memory(buffer, next) {
   this.buffer = buffer;

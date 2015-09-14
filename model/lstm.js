@@ -1,18 +1,22 @@
 // See https://github.com/karpathy/char-rnn/blob/master/model/LSTM.lua
 function LSTM(memory, linalg, params) {
-  const exports = {};
-
   function makeState() {
     var state = memory.malloc(params.nNodes * params.nLayers * 2);
     return resetState(state);
   }
-  exports.makeState = makeState;
 
   function resetState(state) {
     linalg.zero(state, state);
     return state;
   }
-  exports.resetState = resetState;
+
+  function copyState(state) {
+    var newState = memory.malloc(state.length);
+    for (var n = 0; n < state.length; n++) {
+      newState[n] = state[n];
+    }
+    return newState;
+  }
 
   function forward(inState, byte, outState) {
     memory.pushFrame();
@@ -29,7 +33,6 @@ function LSTM(memory, linalg, params) {
     memory.popFrame();
     return outState;
   }
-  exports.forward = forward;
 
   function predict(state) {
     memory.pushFrame();
@@ -40,7 +43,6 @@ function LSTM(memory, linalg, params) {
     memory.popFrame();
     return probs;
   }
-  exports.predict = predict;
 
   function forwardLayer(prevC, prevH, x, i2h, h2h, nextC, nextH) {
     memory.pushFrame();
@@ -76,12 +78,10 @@ function LSTM(memory, linalg, params) {
   function byteToIndex(byte) {
     return params.vocab[byte];
   }
-  exports.byteToIndex = byteToIndex;
 
   function indexToByte(index) {
     return params.ivocab[index];
   }
-  exports.byteToIndex = byteToIndex;
 
   function byteToVector(byte) {
     var vec = memory.malloc(params.affines[0].inLength);
@@ -90,6 +90,14 @@ function LSTM(memory, linalg, params) {
     return vec;
   }
 
-  return exports;
+  return {
+    makeState: makeState,
+    copyState: copyState,
+    resetState: resetState,
+    forward: forward,
+    predict: predict,
+    indexToByte: indexToByte,
+    byteToIndex: byteToIndex,
+  };
 }
 module.exports = LSTM;

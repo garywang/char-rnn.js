@@ -1,8 +1,12 @@
+var utils = require("./utils");
+
 module.exports = function(memory, model) {
   "use strict"
 
-  return function score(bytes) {
+  return function score(str) {
     memory.pushFrame();
+
+    var bytes = utils.stringToBytes(str);
 
     var state = model.makeState();
     var currentScore = 0;
