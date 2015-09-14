@@ -1,3 +1,5 @@
+var assert = require("./assert");
+
 function Linalg(memory) {
   function AsmModule(stdlib, foreign, buffer) {
     "use asm";
@@ -38,7 +40,7 @@ function Linalg(memory) {
     return { matMult: matMult };
   }
 
-  var matMultAsm = AsmModule(worker, null, memory.buffer).matMult;
+  var matMultAsm = AsmModule(global, null, memory.buffer).matMult;
 
   function matMult(matrix, inVec, outVec) {
     assert(matrix.nCols == inVec.length);
@@ -98,6 +100,8 @@ function Linalg(memory) {
     }
     affine.inLength = linear.nCols;
     affine.outLength = linear.nRows;
+    affine.linear = linear;
+    affine.shift = shift;
     return affine;
   }
 
@@ -129,3 +133,4 @@ function Linalg(memory) {
     makeAffineTransformation: makeAffineTransformation,
   };
 }
+module.exports = Linalg;

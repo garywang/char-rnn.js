@@ -1,22 +1,21 @@
 // See https://github.com/karpathy/char-rnn/blob/master/model/LSTM.lua
 function LSTM(memory, linalg, params) {
-  const module = {};
+  const exports = {};
 
   function makeState() {
     var state = memory.malloc(params.nNodes * params.nLayers * 2);
+    return resetState(state);
+  }
+  exports.makeState = makeState;
+
+  function resetState(state) {
     linalg.zero(state, state);
     return state;
   }
-  module.makeState = makeState;
+  exports.resetState = resetState;
 
-  function makeProbs() {
-    return memory.malloc(params.affines[params.affines.length - 1].outLength);
-  }
-  module.makeProbs = makeProbs;
-
-  function forward(inState, byte, outState, outProbs) {
+  function forward(inState, byte, outState) {
     memory.pushFrame();
-
     var input = byteToVector(byte);
     for (var n = 0; n < params.nLayers; n++) {
       input = forwardLayer(indexState(inState, 2 * n),
@@ -27,15 +26,21 @@ function LSTM(memory, linalg, params) {
                            indexState(outState, 2 * n),
                            indexState(outState, 2 * n + 1));
     }
-    var topH = input;
-    params.affines[2 * params.nLayers](topH, outProbs);
-    linalg.exp(outProbs, outProbs);
-    normalize(outProbs);
-
     memory.popFrame();
-    return outProbs;
+    return outState;
   }
-  module.forward = forward;
+  exports.forward = forward;
+
+  function predict(state) {
+    memory.pushFrame();
+    var topH = indexState(state, 2 * params.nLayers - 1);
+    var probs = params.affines[2 * params.nLayers](topH);
+    probs = linalg.exp(probs, probs);
+    probs = normalizeAndExport(probs);
+    memory.popFrame();
+    return probs;
+  }
+  exports.predict = predict;
 
   function forwardLayer(prevC, prevH, x, i2h, h2h, nextC, nextH) {
     memory.pushFrame();
@@ -53,6 +58,8 @@ function LSTM(memory, linalg, params) {
     linalg.vecMultElems(outGate, linalg.tanh(nextC), nextH);
 
     memory.popFrame();
+    //console.log(nextC);
+    //console.log(nextH);
     return nextH;
   }
 
@@ -60,21 +67,21 @@ function LSTM(memory, linalg, params) {
     return state.subarray(n * params.nNodes, (n + 1) * params.nNodes);
   }
 
-  function normalize(probs) {
+  function normalizeAndExport(probs) {
     var sum = probs.reduce((x, y) => x + y);
-    linalg.scalarMult(probs, 1 / sum, probs);
-    return probs;
+    var outProbs = new Float32Array(probs.length);
+    return linalg.scalarMult(probs, 1 / sum, outProbs);
   }
 
   function byteToIndex(byte) {
     return params.vocab[byte];
   }
-  module.byteToIndex = byteToIndex;
+  exports.byteToIndex = byteToIndex;
 
   function indexToByte(index) {
     return params.ivocab[index];
   }
-  module.byteToIndex = byteToIndex;
+  exports.byteToIndex = byteToIndex;
 
   function byteToVector(byte) {
     var vec = memory.malloc(params.affines[0].inLength);
@@ -83,5 +90,6 @@ function LSTM(memory, linalg, params) {
     return vec;
   }
 
-  return module;
+  return exports;
 }
+module.exports = LSTM;

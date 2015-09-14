@@ -1,4 +1,4 @@
-var worker = this;
+var assert = require("./assert");
 
 function stringToBytes(str) {
   return unescape(encodeURIComponent(str));
@@ -32,8 +32,8 @@ function load(path, callback) {
 }
 
 function init(buffer, metadata) {
-  var memory = new Memory(buffer, metadata.next);
-  var linalg = new Linalg(memory);
+  var memory = require("./memory")(buffer, metadata.next);
+  var linalg = require("./linalg")(memory);
 
   var arrays = []
   for (var n = 0; n < metadata.arrays.length; n++) {
@@ -67,16 +67,27 @@ function init(buffer, metadata) {
     }
   }
 
-  var model = LSTM(memory, linalg, params);
+  var model = require("./lstm")(memory, linalg, params);
 
   var d = new Date();
   for (var n = 0; n < 100; n++) {
-    model.forward(model.makeState(), "a", model.makeState(), model.makeProbs());
+    model.predict(model.forward(model.makeState(), "a", model.makeState()));
   }
   console.log(new Date() - d);
-  console.log(model.forward(model.makeState(), "a", model.makeState(), model.makeProbs()));
+  console.log(model.predict(model.forward(model.makeState(), "a", model.makeState())));
+  console.log(model.predict(model.forward(model.makeState(), "a", model.makeState())));
+
+  global.score = require("./score")(memory, model);
+
+  var d = new Date();
+  for (var n = 0; n < 10; n++) {
+    global.score(" this is some text foo bar baz");
+  }
+  console.log(new Date() - d);
 
   return { memory: memory, model: model };
 }
 
-//load("data");
+//load("data/large");
+
+global.load = load;

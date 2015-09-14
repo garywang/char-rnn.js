@@ -6,6 +6,6 @@ function assert(condition) {
 }
 
 window.addEventListener("load", function() {
-  //var worker = new Worker("worker.js");
-  load("data/small");
+  //var worker = new Worker("bundle.js");
+  load("data/large");
 });

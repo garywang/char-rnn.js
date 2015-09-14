@@ -1,3 +1,5 @@
+var assert = require("./assert");
+
 function Memory(buffer, next) {
   this.buffer = buffer;
   this.next = next;
@@ -18,4 +20,8 @@ Memory.prototype.pushFrame = function() {
 Memory.prototype.popFrame = function free(array) {
   this.next = this.stack.pop();
   assert(this.next !== undefined);
+}
+
+module.exports = function(buffer, next) {
+  return new Memory(buffer, next);
 }
