@@ -3,12 +3,14 @@ var utils = require("./utils");
 module.exports = function(memory, model) {
   "use strict"
 
-  return function score(str) {
+  return function score(str, initialState) {
     memory.pushFrame();
 
     var bytes = utils.stringToBytes(str);
+    var state = initialState ?
+      model.copyState(initialState) :
+      model.makeState();
 
-    var state = model.makeState();
     var currentScore = 0;
     for (var n = 0; n < bytes.length; n++) {
       if (n > 0) {

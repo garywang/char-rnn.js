@@ -7,5 +7,5 @@ function assert(condition) {
 
 window.addEventListener("load", function() {
   //var worker = new Worker("bundle.js");
-  load("data/large");
+  load("data/small", "data/large").done();
 });

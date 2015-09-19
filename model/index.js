@@ -26,12 +26,15 @@ function loadFromUrl(path, callback) {
                       get(path + ".json", "json")])
     .then(function(res) {
       console.log("Got data " + path);
-      var model = new Model(res[0], res[1]);
-      return model;
+      return new Model(res[0], res[1]);
     });
 }
 
 function Model(buffer, metadata) {
+  if (!(this instanceof Model)) {
+    return new Model(buffer, metadata);
+  }
+
   var memory = require("./memory")(buffer, metadata.next);
   var linalg = require("./linalg")(memory);
 
@@ -68,15 +71,27 @@ function Model(buffer, metadata) {
   }
 
   var model = require("./lstm")(memory, linalg, params);
+  for (var key in model) {
+    this[key] = model[key];
+  }
 
-  model.memory = memory;
-  model.score = require("./score")(memory, model);
-
-  return model;
+  this.memory = memory;
+  this.score = require("./score")(memory, model);
 }
 
 Model.stringToBytes = stringToBytes;
 Model.bytesToString = bytesToString;
 Model.loadFromUrl = loadFromUrl;
+
+Model.prototype.getState = function(str, initialState) {
+  var bytes = Model.stringToBytes(str);
+  var state = initialState ?
+    this.copyState(initialState) :
+    this.makeState();
+  for (var n = 0; n < bytes.length; n++) {
+    this.forward(state, bytes[n], state);
+  }
+  return state;
+}
 
 module.exports = Model;
