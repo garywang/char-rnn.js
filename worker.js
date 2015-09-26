@@ -22,6 +22,7 @@ function load(smallUrl, largeUrl) {
       */
 
       var checker = new Checker(models[0], models[1]);
+      global.checker = checker;
       global.check = checker.check;
 
       return model;
