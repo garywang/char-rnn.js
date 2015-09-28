@@ -70,13 +70,13 @@ function Model(buffer, metadata) {
     }
   }
 
-  var model = require("./lstm")(memory, linalg, params);
+  var model = require("./lstm")(linalg, params);
   for (var key in model) {
     this[key] = model[key];
   }
 
   this.memory = memory;
-  this.score = require("./score")(memory, model);
+  this.score = require("./score")(model);
 }
 
 Model.stringToBytes = stringToBytes;

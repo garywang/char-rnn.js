@@ -7,7 +7,6 @@ module.exports = function Checker(smallModel, largeModel) {
 
   function compare(contextBefore, contextAfter, original, replacement) {
     function compareWithModel(model) {
-      model.memory.pushFrame();
       var state = model.getState(contextBefore);
       var diff = model.score(replacement + contextAfter, state) -
         model.score(original + contextAfter, state);
@@ -16,7 +15,6 @@ module.exports = function Checker(smallModel, largeModel) {
       if (priorDiff > 0) {
         diff -= priorDiff;
       }
-      model.memory.popFrame();
       return diff;
     }
     var smallDiff = compareWithModel(smallModel);

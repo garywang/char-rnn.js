@@ -1,6 +1,10 @@
-var assert = require("assert");
+const assert = require("assert");
+
+const Vector = Float32Array;
 
 function Linalg(memory) {
+  "use strict";
+
   function AsmModule(stdlib, foreign, buffer) {
     "use asm";
 
@@ -61,7 +65,7 @@ function Linalg(memory) {
   function map1(func) {
     return function(inVec, outVec) {
       if (!outVec) {
-        outVec = memory.malloc(inVec.length);
+        outVec = new Vector(inVec.length);
       }
       assert(inVec.length == outVec.length);
       for (var n = 0; n < inVec.length; n++) {
@@ -75,7 +79,7 @@ function Linalg(memory) {
     return function(one, two, out) {
       assert(one.length == two.length);
       if (!out) {
-        out = memory.malloc(one.length);
+        out = new Vector(one.length);
       }
       assert(one.length == out.length);
       for (var n = 0; n < one.length; n++) {
@@ -87,15 +91,24 @@ function Linalg(memory) {
 
   var add = map2((x, y) => x + y);
   var mult = map2((x, y) => x * y);
+  var copy = map1(x => x);
 
   function makeAffineTransformation(linear, shift) {
     function affine(inVec, outVec) {
+      memory.pushFrame();
+
+      if (inVec.buffer != memory.buffer) {
+        inVec = copy(inVec, memory.malloc(inVec.length));
+      }
       if (!outVec) {
-        outVec = memory.malloc(linear.nRows);
+        outVec = new Vector(linear.nRows);
       }
       assert(inVec.byteOffset != outVec.byteOffset);
-      matMult(linear, inVec, outVec);
-      add(outVec, shift, outVec);
+
+      var product = matMult(linear, inVec, memory.malloc(outVec.length));
+      add(product, shift, outVec);
+
+      memory.popFrame();
       return outVec;
     }
     affine.inLength = linear.nCols;
@@ -107,7 +120,7 @@ function Linalg(memory) {
 
   function sigmoid(inVec, outVec) {
     if (!outVec) {
-      outVec = memory.malloc(inVec.length);
+      outVec = new Vector(inVec.length);
     }
     assert(inVec.length == outVec.length);
     for (var n = 0; n < inVec.length; n++) {
@@ -121,6 +134,7 @@ function Linalg(memory) {
   }
 
   return {
+    Vector: Vector,
     vecAddElems: add,
     vecMultElems: mult,
     scalarMult: scalarMult,

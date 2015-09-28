@@ -1,8 +1,9 @@
 // See https://github.com/karpathy/char-rnn/blob/master/model/LSTM.lua
-function LSTM(memory, linalg, params) {
+function LSTM(linalg, params) {
+  const Vector = linalg.Vector;
+
   function makeState() {
-    var state = memory.malloc(params.nNodes * params.nLayers * 2);
-    return resetState(state);
+    return new Vector(params.nNodes * params.nLayers * 2);
   }
 
   function resetState(state) {
@@ -11,15 +12,10 @@ function LSTM(memory, linalg, params) {
   }
 
   function copyState(state) {
-    var newState = memory.malloc(state.length);
-    for (var n = 0; n < state.length; n++) {
-      newState[n] = state[n];
-    }
-    return newState;
+    return new Vector(state);
   }
 
   function forward(inState, byte, outState) {
-    memory.pushFrame();
     var input = byteToVector(byte);
     for (var n = 0; n < params.nLayers; n++) {
       input = forwardLayer(indexState(inState, 2 * n),
@@ -30,23 +26,18 @@ function LSTM(memory, linalg, params) {
                            indexState(outState, 2 * n),
                            indexState(outState, 2 * n + 1));
     }
-    memory.popFrame();
     return outState;
   }
 
   function predict(state) {
-    memory.pushFrame();
     var topH = indexState(state, 2 * params.nLayers - 1);
     var probs = params.affines[2 * params.nLayers](topH);
-    probs = linalg.exp(probs, probs);
-    probs = normalizeAndExport(probs);
-    memory.popFrame();
+    linalg.exp(probs, probs);
+    normalize(probs, probs);
     return probs;
   }
 
   function forwardLayer(prevC, prevH, x, i2h, h2h, nextC, nextH) {
-    memory.pushFrame();
-
     var allInputSums = linalg.vecAddElems(i2h(x), h2h(prevH));
 
     var inGate = linalg.sigmoid(indexState(allInputSums, 0));
@@ -59,7 +50,6 @@ function LSTM(memory, linalg, params) {
                        nextC);
     linalg.vecMultElems(outGate, linalg.tanh(nextC), nextH);
 
-    memory.popFrame();
     //console.log(nextC);
     //console.log(nextH);
     return nextH;
@@ -69,10 +59,9 @@ function LSTM(memory, linalg, params) {
     return state.subarray(n * params.nNodes, (n + 1) * params.nNodes);
   }
 
-  function normalizeAndExport(probs) {
-    var sum = probs.reduce((x, y) => x + y);
-    var outProbs = new Float32Array(probs.length);
-    return linalg.scalarMult(probs, 1 / sum, outProbs);
+  function normalize(inVec, outVec) {
+    var sum = inVec.reduce((x, y) => x + y);
+    return linalg.scalarMult(inVec, 1 / sum, outVec);
   }
 
   function byteToIndex(byte) {
@@ -84,8 +73,7 @@ function LSTM(memory, linalg, params) {
   }
 
   function byteToVector(byte) {
-    var vec = memory.malloc(params.affines[0].inLength);
-    linalg.zero(vec, vec);
+    var vec = new Vector(params.affines[0].inLength);
     vec[byteToIndex(byte)] = 1.;
     return vec;
   }

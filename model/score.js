@@ -1,11 +1,9 @@
 var utils = require("./utils");
 
-module.exports = function(memory, model) {
+module.exports = function(model) {
   "use strict"
 
   return function score(str, initialState) {
-    memory.pushFrame();
-
     var bytes = utils.stringToBytes(str);
     var state = initialState ?
       model.copyState(initialState) :
@@ -20,7 +18,6 @@ module.exports = function(memory, model) {
       model.forward(state, bytes[n], state);
     }
 
-    memory.popFrame();
     return currentScore;
   }
 }
