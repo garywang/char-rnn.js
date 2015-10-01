@@ -1,7 +1,7 @@
 var assert = require("assert");
 var Promise = require("promise");
 
-var charRnn = require("./model");
+var charRnn = require("./char-rnn");
 var Checker = require("./checker");
 
 function load(smallUrl, largeUrl) {
