@@ -1,9 +1,19 @@
 function stringToBytes(str) {
-  return unescape(encodeURIComponent(str));
+  try {
+    return unescape(encodeURIComponent(str));
+  } catch (e) {
+    throw new Error("Invalid string " +
+                    bytes.split('').map(c => c.charCodeAt(0)));
+  }
 }
 
 function bytesToString(bytes) {
-  return decodeURIComponent(escape(bytes));
+  try {
+    return decodeURIComponent(escape(bytes));
+  } catch (e) {
+    throw new Error("Invalid bytes " +
+                    bytes.split('').map(c => c.charCodeAt(0)));
+  }
 }
 
 function getSequenceLength(firstByte) {

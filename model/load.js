@@ -2,6 +2,7 @@
 
 const Promise = require("promise");
 
+const CharRnn = require("./char-rnn");
 const Memory = require("./memory");
 const Linalg = require("./linalg");
 const Lstm = require("./lstm");
@@ -70,8 +71,8 @@ function load(buffer, metadata) {
   }
 
   var model = new Lstm(linalg, params);
-  return model;
+  return new CharRnn(model);
 }
 
-exports.loadFromUrl = loadFromUrl;
 exports.load = load;
+exports.loadFromUrl = loadFromUrl;
