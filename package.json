@@ -1,6 +1,6 @@
 {
   "name": "char-rnn",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "JavaScript port of https://github.com/karpathy/char-rnn",
   "keywords": [
     "recurrent",
