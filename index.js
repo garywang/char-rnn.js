@@ -1,11 +1,3 @@
+"use strict";
 
-function assert(condition) {
-  if (!condition) {
-    throw new Error("assertion failed");
-  }
-}
-
-window.addEventListener("load", function() {
-  //var worker = new Worker("bundle.js");
-  load("data/small", "data/large").done();
-});
+module.exports = require("./load");

@@ -1,8 +1,8 @@
 {
   "name": "char-rnn",
   "version": "1.0.0",
-  "description": "",
-  "main": "worker.js",
+  "description": "Javascript port of https://github.com/karpathy/char-rnn",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
