@@ -40,7 +40,7 @@ module.exports = function Checker(smallModel, largeModel) {
           if (j != k) {
             var two = sets[i][k];
             replacements[one].push(two);
-            replacements[capitalize(one)].push(two);
+            replacements[capitalize(one)].push(capitalize(two));
           }
         }
       }

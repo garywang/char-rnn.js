@@ -1,97 +1,71 @@
-var assert = require("assert");
-var Promise = require("promise");
+"use strict";
 
+var assert = require("assert");
+
+var loadFromUrl = require("./load").loadFromUrl;
 var utils = require("./utils");
 var stringToBytes = utils.stringToBytes;
 var bytesToString = utils.bytesToString;
 
-function loadFromUrl(path, callback) {
-  function get(url, type) {
-    return new Promise(function(resolve, reject) {
-      var req = new XMLHttpRequest();
-      req.open("GET", url, true);
-      req.responseType = type;
-      req.onload = function() {
-        resolve(req.response);
-      };
-      req.onerror = function() {
-        reject();
-      };
-      req.send();
-      return req;
-    });
+function CharRnn(model) {
+  if (!(this instanceof CharRnn)) {
+    return new CharRnn(model);
   }
 
-  return Promise.all([get(path + ".dat", "arraybuffer"),
-                      get(path + ".json", "json")])
-    .then(function(res) {
-      console.log("Got data " + path);
-      return new Model(res[0], res[1]);
-    });
+  this._model = model;
 }
 
-function Model(buffer, metadata) {
-  if (!(this instanceof Model)) {
-    return new Model(buffer, metadata);
+CharRnn.prototype.getState = function(str, initialState) {
+  if (!str) {
+    str = "";
   }
-
-  var memory = require("./memory")(buffer, metadata.next);
-  var linalg = require("./linalg")(memory);
-
-  var arrays = []
-  for (var n = 0; n < metadata.arrays.length; n++) {
-    var array =
-      new Float32Array(buffer, metadata.arrays[n].offset, metadata.arrays[n].length);
-    var dims = metadata.arrays[n].dim;
-    if (dims.length > 1) {
-      array.nRows = dims[0];
-      array.nCols = dims[1];
-    }
-    array.dims = dims;
-    arrays.push(array);
-  }
-
-  var affines = [];
-  for (var n = 0; n < arrays.length / 2; n++) {
-    affines.push(linalg.makeAffineTransformation(arrays[2 * n], arrays[2 * n + 1]));
-  }
-
-  var params = {};
-  params.affines = affines;
-  params.nNodes = affines[0].outLength / 4;
-  params.nLayers = (affines.length - 1) / 2;
-
-  params.vocab = {};
-  params.ivocab = {};
-  for (var n = 0; n < metadata.vocab.length; n++) {
-    if (metadata.vocab[n] !== null) {
-      params.vocab[String.fromCharCode(n)] = metadata.vocab[n];
-      params.ivocab[metadata.vocab[n]] = String.fromCharCode(n);
-    }
-  }
-
-  var model = require("./lstm")(linalg, params);
-  for (var key in model) {
-    this[key] = model[key];
-  }
-
-  this.memory = memory;
-  this.score = require("./score")(model);
-}
-
-Model.stringToBytes = stringToBytes;
-Model.bytesToString = bytesToString;
-Model.loadFromUrl = loadFromUrl;
-
-Model.prototype.getState = function(str, initialState) {
-  var bytes = Model.stringToBytes(str);
+  var bytes = stringToBytes(str);
   var state = initialState ?
-    this.copyState(initialState) :
-    this.makeState();
+    this._model.copyState(initialState) :
+    this._model.makeState();
+
   for (var n = 0; n < bytes.length; n++) {
-    this.forward(state, bytes[n], state);
+    this._model.forward(state, bytes[n], state);
   }
+
   return state;
 }
 
-module.exports = Model;
+CharRnn.prototype.score = function(str, initialState) {
+  var bytes = stringToBytes(str);
+  var state = initialState ?
+    this._model.copyState(initialState) :
+    this._model.makeState();
+
+  var currentScore = 0;
+  for (var n = 0; n < bytes.length; n++) {
+    var probs = this._model.predict(state);
+    currentScore += Math.log(probs[this._model.byteToIndex(bytes[n])]);
+    console.log(currentScore);
+    if (n < bytes.length - 1) {
+      this._model.forward(state, bytes[n], state);
+    }
+  }
+
+  return currentScore;
+}
+
+CharRnn.prototype.sample = function(state) {
+  var probs = this._model.predict(state);
+  var x = Math.random();
+  for (var n = 0; n < probs.length; n++) {
+    x -= probs[n];
+    if (x < 0) {
+      var byte = this._model.indexToByte(n);
+      return byte;
+    }
+  }
+  assert(false);
+}
+
+exports.loadFromUrl = function(url) {
+  return loadFromUrl(url)
+    .then(function(model) {
+      return new CharRnn(model);
+    });
+};
