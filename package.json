@@ -14,7 +14,7 @@
   "main": "index.js",
   "scripts": {
     "test": "mocha test/*.js",
-    "buildDocs": "documentation build */*.js -o ./docs/docs.md -f md"
+    "buildDocs": "documentation build index.js */*.js -o ./docs/docs.md -f md"
   },
   "author": "Gary Wang <garywang@garywang.net>",
   "license": "MIT",
